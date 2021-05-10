@@ -1,0 +1,191 @@
+﻿#import "PAT.Lib.ClassLibrary1";                                                                                                                                                                                                                                                                                                                                                                                                             #import "PAT.Lib.ClassLibrary1";
+#import "PAT.Lib.HashTable"; 
+
+
+#define S_Legitimacy_L_For_CS cs_check_m==true;
+#define U_Legitimacy_L_For_CS cs_check_g==true;
+#define CS_Legitimacy_L_For_S s_check_v==true;
+#define S_CS_Legitimacy_L_For_U u_check_v==true;
+#define SK_Consistency  (CS_SK==Server_SK)&&(Server_SK==User_SK);
+#define SuccessReplayAttack successreplayattack==true;
+#define Un 6;
+#define Sn 6;
+enum{Master_Secret_Key,Secret_Number,Session_Key,x_value,y_value,b_value,A_value,B_value,
+     C_value,D_value,E_value,F_value,G_value,K_value,M_value,P_value,Q_value,R_value,V_value,T_value,CID_value,SID_value,SK_value,
+     Hash_value_1,Hash_value_2,Hash_value_3,N1_value,N2_value,N3_value,XOR_N1_N3_value,XOR_N2_N3_value,Hash_A_B_value,Hash_y_x_value};
+var x = Master_Secret_Key;
+var y = Secret_Number;
+var b;
+var SK;
+
+var cs_check_m = false;
+var cs_check_g = false;
+var s_check_v = false;
+var u_check_v = false;
+var check_SK = false;
+
+
+
+var<HashTable> ht_U;
+var<HashTable> ht_S;
+var<HashTable> ht_C;
+var<HashTable> ht_A;
+
+var P[Un][Sn];
+var ID[Un];
+var A[Un];
+var B[Un];
+var C[Un];
+var D[Un];
+var E[Un];
+var F[Un];
+var G[Un];
+var K[Un];
+var M[Un];
+var Q[Un];
+var R[Un];
+var V[Un];
+var T[Un];
+var SID[Sn];
+var CID[Un];
+var PW[Un];
+var UserID = 0;
+var UserID_I = 2;
+var ServerID = 1;
+var N[3];
+var CS_SK;
+var Server_SK;
+var User_SK;
+
+var successreplayattack=false;
+
+channel ComSC 0;
+channel ComUC 0;
+channel ComUS 0;
+channel FakeIU 0;
+channel FakeIS 0;
+
+
+Initial(i,j) = InitialID{ID[i]=call(RAND,100,0,1);SID[j]=call(RAND,100,0,2);PW[i]=call(RAND,100,0,3);ht_S.Add(SID_value,SID[j]);} -> Skip;
+
+User_Reg(i) = Select_b{b=call(RAND,100,0,4);ht_U.Add(b_value,b);} -> Compute_A{A[i]=call(ComputeA_1,b,PW[i]);ht_U.Add(A_value,A[i]);} -> ComUC!A[i] 
+             -> ComUC?a2.a3.a4.a5{ht_U.Add(Hash_value_3,a2);ht_U.Add(C_value,a3);ht_U.Add(D_value,a4);ht_U.Add(E_value,a5);} -> Skip;
+
+Server_Reg() = ComSC?b1.b2{ht_S.Add(Hash_value_1,b1);ht_S.Add(Hash_value_2,b2);} -> Skip;
+                
+CS_Reg(i,j) = Select{x=Master_Secret_Key;y=Secret_Number;ht_C.Add(x_value,x);ht_C.Add(y_value,y);} 
+                -> ComputeForS{var t1=call(ComputeHash_SID_y,SID[j],y);var t2=call(ComputeHash_x_y,x,y);ht_C.Add(Hash_value_1,t1);ht_C.Add(Hash_value_2,t2);} 
+                -> ComSC!ht_C.GetValue(Hash_value_1).ht_C.GetValue(Hash_value_2) -> ComUC?v{ht_C.Add(A_value,v);} 
+                -> ComputeForU{B[i]=call(ComputeB_1,ID[i],x);C[i]=call(ComputeC_1,ID[i],y,ht_C.GetValue(A_value));
+                               D[i]=call(ComputeD_1,B[i],ID[i],ht_C.GetValue(A_value));E[i]=call(ComputeE_1,B[i],y,x);
+                               ht_C.Add(B_value,B[i]);ht_C.Add(C_value,C[i]);ht_C.Add(D_value,D[i]);ht_C.Add(E_value,E[i]);}
+                -> ComUC!call(Hash,y).C[i].D[i].E[i]
+                -> Skip;               
+
+User_Auth(i,j) = ComputeB{var t=call(ComputeB_2,ht_U.GetValue(D_value),ID[i],ht_U.GetValue(A_value));ht_U.Add(B_value,t);} 
+              -> GenerateN{var t=call(RAND,100,0,5);ht_U.Add(N1_value,t);} -> ComputeF{F[i]=call(ComputeF_1,ht_U.GetValue(Hash_value_3),ht_U.GetValue(N1_value));ht_U.Add(F_value,F[i]);}
+              -> ComputeG{G[i]=call(ComputeG_1,ht_U.GetValue(B_value),ht_U.GetValue(A_value),ht_U.GetValue(N1_value));}
+              -> ComputeP{P[i][j]=call(ComputeP_1,ht_U.GetValue(E_value),y,ht_U.GetValue(N1_value),SID[j]);}
+              -> ComputeCID{CID[i]=call(ComputeCID_1,ht_U.GetValue(A_value),ht_U.GetValue(B_value),ht_U.GetValue(F_value),ht_U.GetValue(N1_value));}
+              -> ComUS!F[i].G[i].P[i][j].CID[i]
+              -> ComUS?c1.c2{ht_U.Add(V_value,c1);ht_U.Add(T_value,c2);}
+              -> ComputeXOR{var t=call(ComputeXOR_N2_N3,ht_U.GetValue(T_value),ht_U.GetValue(A_value),ht_U.GetValue(B_value),ht_U.GetValue(N1_value));
+                            ht_U.Add(XOR_N2_N3_value,t);}
+              -> ComputeV{var t=call(ComputeV_3,ht_U.GetValue(A_value),ht_U.GetValue(B_value),ht_U.GetValue(XOR_N2_N3_value),ht_U.GetValue(N1_value));
+                          if(t==V[i]){u_check_v=true;}}
+              -> ComputeSK{var t=call(ComputeSK_1,ht_U.GetValue(A_value),ht_U.GetValue(B_value),ht_U.GetValue(N1_value),ht_U.GetValue(XOR_N2_N3_value));
+                           ht_U.Add(SK_value,t);User_SK=t;}
+              -> Skip;
+              
+User_Auth_I(i,j) = ComputeB{var t=call(ComputeB_2,ht_U.GetValue(D_value),ID[i],ht_U.GetValue(A_value));ht_U.Add(B_value,t);} 
+              -> GenerateN{var t=call(RAND,100,0,6);ht_U.Add(N1_value,t);} -> ComputeF{F[i]=call(ComputeF_1,ht_U.GetValue(Hash_value_3),ht_U.GetValue(N1_value));ht_U.Add(F_value,F[i]);}
+              -> ComputeG{G[i]=call(ComputeG_1,ht_U.GetValue(B_value),ht_U.GetValue(A_value),ht_U.GetValue(N1_value));}
+              -> ComputeP{P[i][j]=call(ComputeP_1,ht_U.GetValue(E_value),y,ht_U.GetValue(N1_value),SID[j]);}
+              -> ComputeCID{CID[i]=call(ComputeCID_1,ht_U.GetValue(A_value),ht_U.GetValue(B_value),ht_U.GetValue(F_value),ht_U.GetValue(N1_value));}
+              -> FakeIU!F[i].G[i].P[i][j].CID[i]
+              -> FakeIU?c1.c2{ht_U.Add(V_value,c1);ht_U.Add(T_value,c2);}
+              -> ComputeXOR{var t=call(ComputeXOR_N2_N3,ht_U.GetValue(T_value),ht_U.GetValue(A_value),ht_U.GetValue(B_value),ht_U.GetValue(N1_value));
+                            ht_U.Add(XOR_N2_N3_value,t);}
+              -> ComputeV{var t=call(ComputeV_3,ht_U.GetValue(A_value),ht_U.GetValue(B_value),ht_U.GetValue(XOR_N2_N3_value),ht_U.GetValue(N1_value));
+                          if(t==V[i]){u_check_v=true;}}
+              -> ComputeSK{var t=call(ComputeSK_1,ht_U.GetValue(A_value),ht_U.GetValue(B_value),ht_U.GetValue(N1_value),ht_U.GetValue(XOR_N2_N3_value));
+                           ht_U.Add(SK_value,t);User_SK=t;}
+              -> Skip;          
+
+Server_Auth(i,j) = ComUS?d1.d2.d3.d4{ht_S.Add(F_value,d1);ht_S.Add(G_value,d2);ht_S.Add(P_value,d3);ht_S.Add(CID_value,d4);} 
+              -> GenerateN{var t=call(RAND,100,0,7);ht_S.Add(N2_value,t);} 
+              -> ComputeK{K[i]=call(ComputeK_1,ht_S.GetValue(Hash_value_1),ht_S.GetValue(N2_value));ht_S.Add(K_value,K[i]);}
+              -> ComputeM{M[i]=call(ComputeM_1,ht_S.GetValue(Hash_value_2),ht_S.GetValue(N2_value));ht_S.Add(M_value,M[i]);}
+              -> ComSC!ht_S.GetValue(F_value).ht_S.GetValue(G_value).ht_S.GetValue(P_value).ht_S.GetValue(CID_value).SID[j].K[i].M[i]
+              -> ComSC?e1.e2.e3.e4{ht_S.Add(Q_value,e1);ht_S.Add(R_value,e2);ht_S.Add(V_value,e3);ht_S.Add(T_value,e4);}
+              -> ComputeXOR{var t=call(ComputeXOR_N1_N3,ht_S.GetValue(Q_value),ht_S.GetValue(SID_value),ht_S.GetValue(N2_value));
+                        ht_S.Add(XOR_N1_N3_value,t);}
+              -> ComputeHash{var t=call(ComputeHash_A_B,ht_S.GetValue(R_value),ht_S.GetValue(XOR_N1_N3_value),ht_S.GetValue(N2_value));
+                            ht_S.Add(Hash_A_B_value,t);}
+              -> ComputeV{var t=call(ComputeV_2,ht_S.GetValue(Hash_A_B_value),ht_S.GetValue(XOR_N1_N3_value),ht_S.GetValue(N2_value));
+                          if(t==V[i]){s_check_v=true;}}
+              -> ComUS!ht_S.GetValue(V_value).ht_S.GetValue(T_value)
+              -> ComputeSK{var t=call(ComputeSK_2,ht_S.GetValue(Hash_A_B_value),ht_S.GetValue(N2_value),ht_S.GetValue(XOR_N1_N3_value));
+                           ht_S.Add(SK_value,t);Server_SK=t;}
+              -> Skip;
+              
+Server_Auth_I(i,j) = FakeIS?d1.d2.d3.d4{ht_S.Add(F_value,d1);ht_S.Add(G_value,d2);ht_S.Add(P_value,d3);ht_S.Add(CID_value,d4);}
+              -> GenerateN{var t=call(RAND,100,0,8);ht_S.Add(N2_value,t);} 
+              -> ComputeK{K[i]=call(ComputeK_1,ht_S.GetValue(Hash_value_1),ht_S.GetValue(N2_value));ht_S.Add(K_value,K[i]);}
+              -> ComputeM{M[i]=call(ComputeM_1,ht_S.GetValue(Hash_value_2),ht_S.GetValue(N2_value));ht_S.Add(M_value,M[i]);}
+              -> ComSC!ht_S.GetValue(F_value).ht_S.GetValue(G_value).ht_S.GetValue(P_value).ht_S.GetValue(CID_value).SID[j].K[i].M[i]
+              -> ComSC?e1.e2.e3.e4{ht_S.Add(Q_value,e1);ht_S.Add(R_value,e2);ht_S.Add(V_value,e3);ht_S.Add(T_value,e4);}
+              -> ComputeXOR{var t=call(ComputeXOR_N1_N3,ht_S.GetValue(Q_value),ht_S.GetValue(SID_value),ht_S.GetValue(N2_value));
+                        ht_S.Add(XOR_N1_N3_value,t);}
+              -> ComputeHash{var t=call(ComputeHash_A_B,ht_S.GetValue(R_value),ht_S.GetValue(XOR_N1_N3_value),ht_S.GetValue(N2_value));
+                            ht_S.Add(Hash_A_B_value,t);}
+              -> ComputeV{var t=call(ComputeV_2,ht_S.GetValue(Hash_A_B_value),ht_S.GetValue(XOR_N1_N3_value),ht_S.GetValue(N2_value));
+                          if(t==V[i]){s_check_v=true;}}
+              -> FakeIS!ht_S.GetValue(V_value).ht_S.GetValue(T_value)
+              -> ComputeSK{var t=call(ComputeSK_2,ht_S.GetValue(Hash_A_B_value),ht_S.GetValue(N2_value),ht_S.GetValue(XOR_N1_N3_value));
+                           ht_S.Add(SK_value,t);Server_SK=t;}
+              -> Skip;
+                             
+CS_Auth(i,j) = ComSC?f1.f2.f3.f4.f5.f6.f7{ht_C.Add(F_value,f1);ht_C.Add(G_value,f2);ht_C.Add(P_value,f3);ht_C.Add(CID_value,f4);
+                                            ht_C.Add(SID_value,f5);ht_C.Add(K_value,f6);ht_C.Add(M_value,f7);} 
+                 -> ComputeN{var t=call(ComputeN_1,ht_C.GetValue(K_value),ht_C.GetValue(Hash_value_1));ht_C.Add(N2_value,t);}
+                 -> ComputeM{var t=call(ComputeM_1,ht_C.GetValue(Hash_value_2),ht_C.GetValue(N2_value));if(t==M[i]){cs_check_m=true;}}
+                 -> ComputeN{var t= call(ComputeN_2,ht_C.GetValue(F_value),y);ht_C.Add(N1_value,t);}
+                 -> ComputeB{var t=call(ComputeB_3,ht_C.GetValue(P_value),y,ht_C.GetValue(N1_value),SID[j],x);ht_C.Add(B_value,t);}
+                 -> ComputeA{var t=call(ComputeA_2,CID[i],ht_C.GetValue(B_value),ht_C.GetValue(F_value),ht_C.GetValue(N1_value));ht_C.Add(A_value,t);}
+                 -> ComputeG{var t=call(ComputeG_1,ht_C.GetValue(B_value),ht_C.GetValue(A_value),ht_C.GetValue(N1_value));if(t==G[i]){cs_check_g=true;}}
+                 -> GenerateN{var t=call(RAND,100,0,9);ht_C.Add(N3_value,t);} 
+                 -> ComputeQ{Q[i]=call(ComputeQ_1,ht_C.GetValue(N1_value),ht_C.GetValue(N3_value),ht_C.GetValue(SID_value),ht_C.GetValue(N2_value));
+                             ht_C.Add(Q_value,Q[i]);}
+                 -> ComputeR{R[i]=call(ComputeR_1,ht_C.GetValue(A_value),ht_C.GetValue(B_value),ht_C.GetValue(N1_value),ht_C.GetValue(N2_value),ht_C.GetValue(N3_value));
+                             ht_C.Add(R_value,R[i]);} 
+                 -> ComputeV{V[i]=call(ComputeV_1,ht_C.GetValue(A_value),ht_C.GetValue(B_value),ht_C.GetValue(N1_value),ht_C.GetValue(N2_value),ht_C.GetValue(N3_value));
+                             ht_C.Add(V_value,V[i]);} 
+                 -> ComputeT{T[i]=call(ComputeT_1,ht_C.GetValue(N2_value),ht_C.GetValue(N3_value),ht_C.GetValue(A_value),ht_C.GetValue(B_value),ht_C.GetValue(N1_value));
+                             ht_C.Add(T_value,T[i]);} 
+                 -> ComSC!Q[i].R[i].V[i].T[i]
+                 -> ComputeSK{var t=call(ComputeSK_3,ht_C.GetValue(A_value),ht_C.GetValue(B_value),ht_C.GetValue(N1_value),ht_C.GetValue(N2_value),ht_C.GetValue(N3_value));
+                              ht_C.Add(SK_value,t);CS_SK=t;}
+                 -> Skip;
+                 
+Intruder() = FakeIU?t1.t2.t3.t4 -> FakeIS!t1.t2.t3.t4 -> FakeIS?v1.v2 -> CheckReplayAttack{successreplayattack=true;}-> Skip;
+ 
+User(i,j) = User_Reg(i);User_Auth(i,j);
+Server(i,j) = Server_Reg();Server_Auth(i,j);
+CS(i,j) = CS_Reg(i,j);CS_Auth(i,j);
+Protocol_L() = Initial(UserID,ServerID);(User(UserID,ServerID)||Server(UserID,ServerID)||CS(UserID,ServerID));Protocol_L();
+
+User_I(i,j) = User_Reg(i);User_Auth_I(i,j);
+Server_I(i,j) = Server_Reg();Server_Auth_I(i,j);
+
+Protocol_L_I() = Initial(UserID,ServerID);(User_I(UserID,ServerID)||Server_I(UserID,ServerID)||CS(UserID,ServerID)||Intruder());Protocol_L_I();
+
+#assert Protocol_L() deadlockfree;
+#assert Protocol_L() |= <> S_Legitimacy_L_For_CS;
+#assert Protocol_L() |= <> U_Legitimacy_L_For_CS;
+#assert Protocol_L() |= <> CS_Legitimacy_L_For_S;
+#assert Protocol_L() |= <> S_CS_Legitimacy_L_For_U;
+#assert Protocol_L() |= <> SK_Consistency;
+
+#assert Protocol_L_I() reaches SuccessReplayAttack;
+
