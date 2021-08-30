@@ -1,0 +1,285 @@
+﻿#import "PAT.Lib.ClassLibrary1";                                                                                                                                                                                                                                                                                                                                                                                                             #import "PAT.Lib.ClassLibrary1";
+#import "PAT.Lib.HashTable"; 
+#import "PAT.Lib.List"; 
+
+
+#define S_Legitimacy_For_CS cs_check_Vers==true;
+#define U_Legitimacy_For_CS cs_check_Veru==true;
+
+#define SK_Consistency  (CS_SK==Server_SK)&&(Server_SK==User_SK);
+#define SuccessRelayAttack success_replay_attack==true;
+#define SuccessSessionKeyAttack success_session_key_attack==true;
+#define TimeOut timeout==true;
+#define SuccessDoSAttack (success_dos_attack==true);
+#define SuccessServerSpoofingAttack (success_server_spoofing_attack==true);
+
+#define Un 6;
+#define Sn 6;
+enum{Master_Secret_Key,Secret_Number,Session_Key,x_value,ID_value,UID_R_value,SID_R_value,UID_A_value,SID_A_value,SK_value,
+     Hash_x_value,Hash_value_2,Hash_value_3,N1_value,N2_value,N3_value,XOR_N1_N3_value,XOR_N2_N3_value,
+     Hash_A_B_value,Hash_y_x_value,Serinfor_R_value,Serinfor_A_value,EncPass_value,Userinfor_value,TS_value,TS_c_value,
+     TS_CS_value,TS_CS_c_value,Veru_value,A_value,Vers_value,B_value,C_value,D_value,E_value,Hash_A_x_value};
+var x = Master_Secret_Key;
+var y = Secret_Number;
+var b;
+var SK;
+
+
+var<HashTable> ht_U;
+var<HashTable> ht_S;
+var<HashTable> ht_C;
+var<HashTable> ht_A;
+var<HashTable> ht_I;
+
+var<List> VerifierTable;
+
+var P[Un][Sn];
+var ID[Un];
+var A[Un];
+var B[Un];
+var C[Un];
+var D[Un];
+var E[Un];
+var F[Un];
+var G[Un];
+var K[Un];
+var M[Un];
+var Q[Un];
+var R[Un];
+var V[Un];
+var T[Un];
+var SID[Sn];
+var UID[Un];
+var CID[Un];
+var PW[Un];
+var UserID = 0;
+var UserID_I = 2;
+var ServerID = 1;
+var N[3];
+var CS_SK=-1;
+var Server_SK=-2;
+var User_SK=-3;
+var delaym = 2;
+var delays = 0;
+
+var timeout = false;
+var unregistered = false;
+var success_replay_attack=false;
+var cs_check_Vers = false;
+var cs_check_Veru = false;
+
+var TS_old=0;
+var TS_fake=1082222;
+var get_N1=false;
+var get_N2=false;
+var get_XOR_N1_N3 = false;
+var get_Hash_A_x = false;
+var get_XOR_N2_N3 = false;
+var success_session_key_attack=false;
+var success_dos_attack=false;
+var success_server_spoofing_attack=false;
+var A_fake=9999;
+var Veru_fake=800;
+var UID_fake=66;
+var SID_fake=62;
+
+
+channel ComSC 0;
+channel ComUC 0;
+channel ComUS 0;
+channel FakeUI 0;
+channel FakeSI 0;
+channel FakeIS 0;
+channel FakeIC 0;
+
+Initial(i,j) = InitialID{ID[i]=call(RAND,100,0,1);UID[i]=call(RAND,100,0,2);SID[j]=call(RAND,100,0,3);PW[i]=call(RAND,100,0,4);ht_S.Add(SID_R_value,SID[j]);} 
+             -> Select{x=Master_Secret_Key;ht_C.Add(x_value,x);var t=call(Hash,x);ht_C.Add(Hash_x_value,t);} -> Skip;
+
+Server_B_Reg(j) = ComSC!SID[j] ->  ComSC?s{ht_S.Add(Serinfor_R_value,s);} -> Skip;
+
+CS_B_Reg() = ComSC?sidj{ht_C.Add(SID_R_value,sidj);} -> Compute_Serinfor{var t=call(Compute_Serinfor,ht_C.GetValue(SID_R_value),ht_C.GetValue(x_value));
+                                                                      ht_C.Add(Serinfor_R_value,t);} 
+             -> ComSC!ht_C.GetValue(Serinfor_R_value) -> ComUC?idi.encpassi.uidi{ht_C.Add(ID_value,idi);ht_C.Add(EncPass_value,encpassi);
+                                                                        ht_C.Add(UID_R_value,uidi);}
+             -> Compute_Userinfor{var t=call(Compute_Userinfor,ht_C.GetValue(EncPass_value),ht_C.GetValue(x_value));ht_C.Add(Userinfor_value,t);}
+             -> StoreTable{VerifierTable.Add(ht_C.GetValue(UID_R_value));}
+             -> ComUC!ht_C.GetValue(UID_R_value).ht_C.GetValue(Userinfor_value).ht_C.GetValue(EncPass_value).ht_C.GetValue(Hash_x_value) -> Skip;
+
+User_B_Reg(i) =  ComputeEncPass{var t=call(Compute_EncPass,ID[i],PW[i]);ht_U.Add(EncPass_value,t);} -> ComUC!ID[i].ht_U.GetValue(EncPass_value).UID[i] 
+             -> ComUC?c1.c2.c3.c4{ht_U.Add(UID_R_value,c1);ht_U.Add(Userinfor_value,c2);ht_U.Add(EncPass_value,c3);ht_U.Add(Hash_x_value,c4);} -> Skip;
+
+//user跳过smartcard的验证             
+
+ 
+User_B_Auth_I(i,InturderCond) = GenerateN1{var t=call(RAND,20,0,5);ht_U.Add(N1_value,t);} -> GenerateTS{ht_U.Add(TS_value,call(Timestamp));ht_U.Add(TS_c_value,call(RAND,20,0,22));} 
+             -> ComputeA{var t=call(Compute_A,ht_U.GetValue(Userinfor_value),ht_U.GetValue(Hash_x_value),ht_U.GetValue(N1_value));ht_U.Add(A_value,t);} 
+             -> ComputeVeru{var t=call(Compute_Veru,ht_U.GetValue(Hash_x_value),ht_U.GetValue(N1_value));ht_U.Add(Veru_value,t);}  
+             -> if (InturderCond) {User_B_Auth_Sub1(i)} else {User_B_Auth_Sub2(i)};
+             
+             
+User_B_Auth_I_Sub() = ComputeXOR{var t=call(Compute_Ni2_Ni3,ht_U.GetValue(E_value),ht_U.GetValue(A_value),ht_U.GetValue(Hash_x_value));ht_U.Add(XOR_N2_N3_value,t);}
+             -> ComputeSK{var t=call(Compute_SK_2, ht_U.GetValue(A_value),ht_U.GetValue(Hash_x_value),ht_U.GetValue(XOR_N2_N3_value),ht_U.GetValue(N1_value));ht_U.Add(SK_value,t);User_SK=t;}
+             -> Skip;
+                         
+User_B_Auth_Sub1(i) = FakeUI!UID[i].ht_U.GetValue(A_value).ht_U.GetValue(Veru_value).ht_U.GetValue(TS_value) 
+             -> (User_B_Auth_Sub1_1()[*]  Skip); 
+             
+User_B_Auth_Sub1_1() = FakeUI?c1.c2{ht_U.Add(E_value,c1);ht_U.Add(TS_CS_value,c2);ht_I.Add(E_value,c1);ht_I.Add(TS_CS_value,c2);} -> CheckDelay{var t=call(EndSession, ht_U.GetValue(TS_CS_value), call(Timestamp), delaym, delays);
+                                                                                                                                               if(t==true){timeout=true;}} ->ifa(timeout){Skip}else{User_B_Auth_I_Sub()};
+               
+User_B_Auth_Sub2(i) = ComUS!UID[i].ht_U.GetValue(A_value).ht_U.GetValue(Veru_value).ht_U.GetValue(TS_value) 
+             -> (User_B_Auth_Sub2_1()[*]  Skip);                 
+User_B_Auth_Sub2_1() = ComUS?c1.c2{ht_U.Add(E_value,c1);ht_U.Add(TS_CS_value,c2);} -> CheckDelay{var t=call(EndSession, ht_U.GetValue(TS_CS_value), call(Timestamp), delaym, delays);if(t==true){timeout=true;}} ->ifa(timeout){Skip}else{User_B_Auth_I_Sub()};           
+             
+Server_B_Auth_I(j,InturderCond1,InturderCond2) = AddSID{ht_S.Add(SID_A_value,SID[j]);} -> if (InturderCond1) {Server_B_Auth_Sub1()} else {Server_B_Auth_Sub2()};GenerateN2{var t=call(RAND,20,0,6);ht_S.Add(N2_value,t);}
+             -> ComputeB{var t=call(Compute_B,ht_S.GetValue(Serinfor_R_value),ht_S.GetValue(N2_value));ht_S.Add(B_value,t);}
+             -> ComputeVers{var t=call(Compute_Vers_1,ht_S.GetValue(Serinfor_R_value),ht_S.GetValue(N2_value));ht_S.Add(Vers_value,t);} 
+             -> if (InturderCond2) {Server_B_Auth_Sub3(InturderCond1)} else {Server_B_Auth_Sub4(InturderCond1)}; 
+             
+Server_B_Auth_I_Sub(InturderCond1) = ComputeXOR{var t=call(Compute_Ni1_Ni3,ht_S.GetValue(C_value),ht_S.GetValue(SID_A_value),ht_S.GetValue(N2_value));ht_S.Add(XOR_N1_N3_value,t);}
+             -> ComputeHash{var t=call(Compute_Hash_A_x,ht_S.GetValue(D_value),ht_S.GetValue(SID_A_value),ht_S.GetValue(N2_value));ht_S.Add(Hash_A_x_value,t);}
+             -> ComputeSK{var t=call(Compute_SK_1,ht_S.GetValue(Hash_A_x_value),ht_S.GetValue(XOR_N1_N3_value),ht_S.GetValue(N2_value));ht_S.Add(SK_value,t);Server_SK=t;}                        
+             -> if (InturderCond1) {Server_B_Auth_Sub5()} else {Server_B_Auth_Sub6()};
+            
+Server_B_Auth_Sub1() = FakeIS?a1.a2.a3.a4{ht_S.Add(UID_A_value,a1);ht_S.Add(A_value,a2);ht_S.Add(Veru_value,a3);ht_S.Add(TS_value,a4);ht_I.Add(UID_A_value,a1);ht_I.Add(A_value,a2);ht_I.Add(Veru_value,a3);ht_I.Add(TS_value,a4);} -> Skip;
+Server_B_Auth_Sub2() = ComUS?a1.a2.a3.a4{ht_S.Add(UID_A_value,a1);ht_S.Add(A_value,a2);ht_S.Add(Veru_value,a3);ht_S.Add(TS_value,a4);} -> Skip;
+Server_B_Auth_Sub3(InturderCond1) =  FakeSI!ht_S.GetValue(UID_A_value).ht_S.GetValue(A_value).ht_S.GetValue(Veru_value).ht_S.GetValue(B_value).ht_S.GetValue(Vers_value).ht_S.GetValue(SID_A_value).ht_S.GetValue(TS_value) 
+                                     -> (Server_B_Auth_Sub3_1(InturderCond1)[*] Skip);
+             
+Server_B_Auth_Sub3_1(InturderCond1) = FakeSI?c1.c2.c3.c4{ht_S.Add(C_value,c1);ht_S.Add(D_value,c2);ht_S.Add(E_value,c3);ht_S.Add(TS_CS_value,c4);ht_I.Add(C_value,c1);ht_I.Add(D_value,c2);ht_I.Add(E_value,c3);ht_I.Add(TS_CS_value,c4);} 
+                                      -> Server_B_Auth_I_Sub(InturderCond1);
+
+Server_B_Auth_Sub4(InturderCond1) = ComSC!ht_S.GetValue(UID_A_value).ht_S.GetValue(A_value).ht_S.GetValue(Veru_value).ht_S.GetValue(B_value).ht_S.GetValue(Vers_value).ht_S.GetValue(SID_A_value).ht_S.GetValue(TS_value) 
+             -> (Server_B_Auth_Sub4_1(InturderCond1)[*]Skip);
+
+Server_B_Auth_Sub4_1(InturderCond1) = ComSC?c1.c2.c3.c4{ht_S.Add(C_value,c1);ht_S.Add(D_value,c2);ht_S.Add(E_value,c3);ht_S.Add(TS_CS_value,c4);} -> Server_B_Auth_I_Sub(InturderCond1);
+
+Server_B_Auth_Sub5() = FakeIS!ht_S.GetValue(E_value).ht_S.GetValue(TS_CS_value) -> Skip; 
+Server_B_Auth_Sub6() = ComUS!ht_S.GetValue(E_value).ht_S.GetValue(TS_CS_value) -> Skip; 
+
+
+CS_B_Auth_I(InturderCond) = if (InturderCond) {CS_B_Auth_Sub1()} else {CS_B_Auth_Sub2()};
+            CheckUID{if(!VerifierTable.Contains(ht_C.GetValue(UID_A_value))) {unregistered=true;}}
+            -> CheckDelay{var t=call(EndSession, ht_C.GetValue(TS_value), call(Timestamp), delaym, delays);if(t==true){timeout=true;}} ->if(timeout||unregistered){Skip}else{CS_B_Auth_I_Sub(InturderCond)};
+            
+CS_B_Auth_I_Sub(InturderCond) =            
+            GenerateN3{var t=call(RAND,20,0,9);ht_C.Add(N3_value,t);}
+            -> ComputeSerinfor{var t=call(Compute_Serinfor,ht_C.GetValue(SID_A_value),ht_C.GetValue(x_value));ht_C.Add(Serinfor_A_value,t);} 
+            -> ComputeN2{var t=call(Compute_Ni2,ht_C.GetValue(Serinfor_A_value),ht_C.GetValue(B_value));ht_C.Add(N2_value,t);}
+            -> ComputeVers{var t=call(Compute_Vers_1,ht_C.GetValue(Serinfor_A_value),ht_C.GetValue(N2_value));if(t==ht_C.GetValue(Vers_value)){cs_check_Vers=true;}}
+            ->if(cs_check_Vers==true){CS_B_Auth_I_Sub_Sub(InturderCond)}else{Skip};
+            
+CS_B_Auth_I_Sub_Sub(InturderCond) = 
+            ComputeN1{var t=call(Compute_Ni1,ht_C.GetValue(Userinfor_value),ht_C.GetValue(x_value),ht_C.GetValue(A_value));ht_C.Add(N1_value,t);}
+            -> ComputeVeru{var t=call(Compute_Veru,ht_C.GetValue(Hash_x_value),ht_C.GetValue(N1_value));if(t==ht_C.GetValue(Veru_value)){cs_check_Veru=true;}} 
+            -> ComputeSK{var t=call(Compute_SK,ht_C.GetValue(A_value),ht_C.GetValue(x_value),ht_C.GetValue(N1_value),ht_C.GetValue(N2_value),ht_C.GetValue(N3_value));ht_C.Add(SK_value,t);CS_SK=t;}
+            -> GenerateTS{ht_C.Add(TS_CS_value,call(Timestamp));ht_C.Add(TS_CS_c_value,call(RAND,20,0,24));} 
+            -> ComputeC{var t=call(Compute_C,ht_C.GetValue(N1_value),ht_C.GetValue(N2_value),ht_C.GetValue(N3_value),ht_C.GetValue(SID_A_value));ht_C.Add(C_value,t);}
+            -> ComputeD{var t=call(Compute_D,ht_C.GetValue(A_value),ht_C.GetValue(x_value),ht_C.GetValue(SID_A_value),ht_C.GetValue(N2_value));ht_C.Add(D_value,t);}
+            -> ComputeE{var t=call(Compute_E,ht_C.GetValue(N2_value),ht_C.GetValue(N3_value),ht_C.GetValue(A_value),ht_C.GetValue(x_value));ht_C.Add(E_value,t);}
+            -> if (InturderCond) {CS_B_Auth_Sub3()} else {CS_B_Auth_Sub4()};
+
+CS_B_Auth_Sub1() = FakeIC?c1.c2.c3.c4.c5.c6.c7{ht_C.Add(UID_A_value,c1);ht_C.Add(A_value,c2);ht_C.Add(Veru_value,c3);ht_C.Add(B_value,c4);ht_C.Add(Vers_value,c5);ht_C.Add(SID_A_value,c6);ht_C.Add(TS_value,c7);
+                                             ht_I.Add(UID_A_value,c1);ht_I.Add(A_value,c2);ht_I.Add(Veru_value,c3);ht_I.Add(B_value,c4);ht_I.Add(Vers_value,c5);ht_I.Add(SID_A_value,c6);ht_I.Add(TS_value,c7);} -> Skip;
+CS_B_Auth_Sub2() = ComSC?c1.c2.c3.c4.c5.c6.c7{ht_C.Add(UID_A_value,c1);ht_C.Add(A_value,c2);ht_C.Add(Veru_value,c3);ht_C.Add(B_value,c4);ht_C.Add(Vers_value,c5);ht_C.Add(SID_A_value,c6);ht_C.Add(TS_value,c7);} -> Skip;
+CS_B_Auth_Sub3() = FakeIC!ht_C.GetValue(C_value).ht_C.GetValue(D_value).ht_C.GetValue(E_value).ht_C.GetValue(TS_CS_value) -> Skip;
+CS_B_Auth_Sub4() = ComSC!ht_C.GetValue(C_value).ht_C.GetValue(D_value).ht_C.GetValue(E_value).ht_C.GetValue(TS_CS_value) -> Skip;
+
+
+
+/*User(i) = User_Reg(i);User_Auth(i);
+Server(i,j) = Server_Reg(j);Server_Auth(i);
+CS() = CS_Reg();CS_Auth();*/
+
+
+
+Protocol_B_Reg(i,j) = Initial(i,j);(User_B_Reg(i)||Server_B_Reg(j)||CS_B_Reg());
+
+Protocol_B_Auth(i,j,Cond1,Cond2) = (User_B_Auth_I(i,Cond1)||Server_B_Auth_I(j,Cond1,Cond2)||CS_B_Auth_I(Cond2));
+
+
+
+//假设在U和S之间加入入侵者，修改TS，那么到CS的delay验证就会出错
+Intruder_B_ReplayAttack() = FakeUI?t1.t2.t3.t4 -> ModifyTimestamp{TS_old = call(ModifyTimestamp,t4,delaym+1);} -> FakeIS!t1.t2.t3.TS_old -> (Intruder_B_ReplayAttack_Sub()[*]Skip);
+Intruder_B_ReplayAttack_Sub() = FakeIS?v1.v2 -> FakeUI!v1.v2 -> CheckReplayAttack{success_replay_attack=true;}-> Skip;
+
+Intruder_B_DoSAttack() = FakeUI?t1.t2.t3.t4 -> FakeIS!UID_fake.A_fake.Veru_fake.TS_fake -> (Intruder_B_DoSAttack_Sub()[*]Skip);
+Intruder_B_DoSAttack_Sub() = FakeIS?v1.v2 -> FakeUI!v1.v2 -> CheckDoSAttack{success_dos_attack=true;}-> Skip;
+
+Intruder_B_SessionKeyAttack() = FakeUI?a1.a2.a3.a4 -> FakeIS!a1.a2.a3.a4 -> FakeSI?b1.b2.b3.b4.b5.b6.b7 -> FakeIC!b1.b2.b3.b4.b5.b6.b7 -> 
+                            FakeIC?v1.v2.v3.v4 -> FakeSI!v1.v2.v3.v4 -> FakeIS?t1.t2 -> FakeUI!t1.t2 ->
+                            ExtractFromA{if(ht_I.ContainsKey(A_value)&&ht_I.ContainsKey(Userinfor_value)&&ht_I.ContainsKey(Hash_x_value)) {get_N1=true;}} ->
+                            ExtractFromB{if(ht_I.ContainsKey(B_value)&&ht_I.ContainsKey(Serinfor_A_value)) {get_N2=true;}} ->
+                            ExtractFromC{if(ht_I.ContainsKey(C_value)&&ht_I.ContainsKey(SID_A_value)&&ht_I.ContainsKey(N2_value)) {get_XOR_N1_N3=true;}} ->
+                            ExtractFromD{if(ht_I.ContainsKey(D_value)&&ht_I.ContainsKey(SID_A_value)&&ht_I.ContainsKey(N2_value)) {get_Hash_A_x=true;}} -> 
+                            ExtractFromE{if(ht_I.ContainsKey(E_value)&&ht_I.ContainsKey(Hash_A_x_value)) {get_XOR_N2_N3=true;}} -> 
+                            ExtractSK{if(((get_N2==true&&get_XOR_N1_N3==true)||(get_N1==true&&get_XOR_N2_N3==true))&&get_Hash_A_x==true) {success_session_key_attack=true;}} -> Skip; 
+ //假冒Server
+Intruder_B_ServerSpoofingAttack() = FakeUI?a1.a2.a3.a4 -> FakeIS!a1.a2.a3.a4 -> FakeSI?b1.b2.b3.b4.b5.b6.b7 
+                                -> FakeIC!b1.b2.b3.b4.b5.SID_fake.b7 -> (Intruder_B_ServerSpoofingAttack_Sub()[*]Skip);
+Intruder_B_ServerSpoofingAttack_Sub() = FakeIC?v1.v2.v3.v4 -> FakeSI!v1.v2.v3.v4 -> CheckServerSpoofingAttack{success_server_spoofing_attack=true;}-> Skip;
+ 
+Protocol_B() = Protocol_B_Reg(UserID,ServerID);Protocol_B_Auth(UserID,ServerID,false,false);
+Protocol_B_ServerSpoofingAttack() = Protocol_B_Reg(UserID,ServerID);(Protocol_B_Auth(UserID,ServerID,true,true)||Intruder_B_ServerSpoofingAttack());
+Protocol_B_ReplayAttack() = Protocol_B_Reg(UserID,ServerID);(Protocol_B_Auth(UserID,ServerID,true,false)||Intruder_B_ReplayAttack());
+Protocol_B_DoSAttack() = Protocol_B_Reg(UserID,ServerID);(Protocol_B_Auth(UserID,ServerID,true,false)||Intruder_B_DoSAttack());
+Protocol_B_SessionKeyAttack() = Protocol_B_Reg(UserID,ServerID);(Protocol_B_Auth(UserID,ServerID,true,true)||Intruder_B_SessionKeyAttack());
+
+//Protocol() = Protocol_Registration();Protocol_Authentication();
+
+
+#assert Protocol_B() deadlockfree;
+#assert Protocol_B_ServerSpoofingAttack() deadlockfree;
+#assert Protocol_B_ReplayAttack() deadlockfree;
+#assert Protocol_B_DoSAttack() deadlockfree;
+#assert Protocol_B_SessionKeyAttack() deadlockfree;
+
+#assert Protocol_B() |= <> S_Legitimacy_For_CS;
+#assert Protocol_B_ServerSpoofingAttack() |= <> S_Legitimacy_For_CS;
+#assert Protocol_B_ReplayAttack() |= <> S_Legitimacy_For_CS;
+#assert Protocol_B_DoSAttack() |= <> S_Legitimacy_For_CS;
+#assert Protocol_B_SessionKeyAttack() |= <> S_Legitimacy_For_CS;
+
+#assert Protocol_B() |= <> U_Legitimacy_For_CS;
+#assert Protocol_B_ServerSpoofingAttack() |= <> U_Legitimacy_For_CS;
+#assert Protocol_B_ReplayAttack() |= <> U_Legitimacy_For_CS;
+#assert Protocol_B_DoSAttack() |= <> U_Legitimacy_For_CS;
+#assert Protocol_B_SessionKeyAttack() |= <> U_Legitimacy_For_CS;
+
+
+#assert Protocol_B() |= <> SK_Consistency;
+#assert Protocol_B_ServerSpoofingAttack() |= <> SK_Consistency;
+#assert Protocol_B_ReplayAttack() |= <> SK_Consistency;
+#assert Protocol_B_DoSAttack() |= <> SK_Consistency;
+#assert Protocol_B_SessionKeyAttack() |= <> SK_Consistency;
+
+#assert Protocol_B() |=[]!TimeOut;
+#assert Protocol_B_ServerSpoofingAttack() |=[]!TimeOut;
+#assert Protocol_B_ReplayAttack() |=[]!TimeOut;
+#assert Protocol_B_DoSAttack() |=[]!TimeOut;
+#assert Protocol_B_SessionKeyAttack() |=[]!TimeOut;
+
+#assert Protocol_B_ReplayAttack() reaches SuccessRelayAttack;
+#assert Protocol_B_SessionKeyAttack() reaches SuccessSessionKeyAttack;
+#assert Protocol_B_DoSAttack() reaches SuccessDoSAttack;
+#assert Protocol_B_ServerSpoofingAttack() reaches SuccessServerSpoofingAttack;
+
+/*User(i,j) = User_Reg(i);User_Auth(i,j);
+Server(i,j) = Server_Reg();Server_Auth(i,j);
+CS(i,j) = CS_Reg(i,j);CS_Auth(i,j);
+Protocol_L() = Initial(UserID,ServerID);(User(UserID,ServerID)||Server(UserID,ServerID)||CS(UserID,ServerID));Protocol_L();
+
+User_I(i,j) = User_Reg(i);User_Auth_I(i,j);
+Server_I(i,j) = Server_Reg();Server_Auth_I(i,j);
+
+Protocol_L_I() = Initial(UserID,ServerID);(User_I(UserID,ServerID)||Server_I(UserID,ServerID)||CS(UserID,ServerID)||Intruder());Protocol_L_I();
+
+#assert Protocol_L() deadlockfree;
+#assert Protocol_L() |= [*]  S_Legitimacy_L_For_CS;
+#assert Protocol_L() |= [*]  U_Legitimacy_L_For_CS;
+#assert Protocol_L() |= [*]  CS_Legitimacy_L_For_S;
+#assert Protocol_L() |= [*]  S_CS_Legitimacy_L_For_U;
+#assert Protocol_L() |= [*]  SK_Consistency;
+
+#assert Protocol_L_I() reaches SuccessReplayAttack;*/
+
